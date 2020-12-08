@@ -1,35 +1,43 @@
 package mail
 
 import (
-	"github.com/gin-gonic/gin"
 	"net/http"
+	"strconv"
 	"strings"
+	"github.com/gin-gonic/gin"
 	"HFish/core/dbUtil"
-	"HFish/utils/send"
 	"HFish/error"
+	"HFish/utils/log"
+	"HFish/utils/send"
 )
 
 func Html(c *gin.Context) {
 	c.HTML(http.StatusOK, "mail.html", gin.H{})
 }
 
-/*发送邮件*/
 func SendEmailToUsers(c *gin.Context) {
 	emails := c.PostForm("emails")
 	title := c.PostForm("title")
-	from := c.PostForm("from")
 	content := c.PostForm("content")
 
 	eArr := strings.Split(emails, ",")
-	sql := `select status,info from hfish_setting where type = "mail"`
-	isAlertStatus := dbUtil.Query(sql)
-	info := isAlertStatus[0]["info"]
-	config := strings.Split(info.(string), "&&")
 
-	if from != "" {
-		config[2] = from
+	result, err := dbUtil.DB().Table("hfish_setting").Fields("status", "info").Where("type", "=", "mail").First()
+
+	if err != nil {
+		log.Pr("HFish", "127.0.0.1", "查询邮件配置信息失败", err)
 	}
 
-	send.SendMail(eArr, title, content, config)
-	c.JSON(http.StatusOK, error.ErrSuccessNull())
+	info := result["info"]
+	config := strings.Split(info.(string), "&&")
+
+	status := strconv.FormatInt(result["status"].(int64), 10)
+
+	if status == "1" {
+		send.SendMail(eArr, title, content, config)
+
+		c.JSON(http.StatusOK, error.ErrSuccess)
+	} else {
+		c.JSON(http.StatusOK, error.ErrFailMail)
+	}
 }

@@ -1,8 +1,10 @@
 package login
 
 import (
-	"github.com/gin-gonic/gin"
 	"net/http"
+	"time"
+	"github.com/gin-gonic/gin"
+	"github.com/gin-contrib/sessions"
 	"HFish/error"
 	"HFish/utils/conf"
 )
@@ -13,11 +15,13 @@ func Html(c *gin.Context) {
 
 func Jump(c *gin.Context) {
 	account := conf.Get("admin", "account")
-	loginCookie, _ := c.Cookie("is_login")
+
+	session := sessions.Default(c)
+	loginCookie := session.Get("is_login")
+
 	if account != loginCookie {
 		c.Redirect(http.StatusFound, "/login")
 		c.Abort()
-		return
 	} else {
 		c.Next()
 	}
@@ -32,16 +36,21 @@ func Login(c *gin.Context) {
 
 	if loginName == account {
 		if loginPwd == password {
-			c.SetCookie("is_login", loginName, 60*60*24, "/", "*", false, true)
-			c.JSON(http.StatusOK, error.ErrSuccessNull())
+			session := sessions.Default(c)
+			session.Set("is_login", loginName)
+			session.Set("time", time.Now().Format("2006-01-02 15:04:05"))
+			session.Save()
+
+			c.JSON(http.StatusOK, error.ErrSuccess)
 			return
 		}
 	}
 
-	c.JSON(http.StatusOK, error.ErrLoginFail())
+	c.JSON(http.StatusOK, error.ErrFailLogin)
 }
 
 func Logout(c *gin.Context) {
-	c.SetCookie("is_login", "", -1, "/", "*", false, true)
+	session := sessions.Default(c)
+	session.Clear()
 	c.Redirect(http.StatusFound, "/login")
 }

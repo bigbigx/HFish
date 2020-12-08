@@ -1,119 +1,97 @@
 package conf
 
 import (
-	"bufio"
-	"io"
-	"os"
-	"strings"
+	"gopkg.in/ini.v1"
+	"HFish/utils/log"
+	"container/list"
 )
 
-const middle = "=HFish="
+var cfg *ini.File
 
-type Config struct {
-	Mymap  map[string]string
-	MyNode map[string]string
-	strcet string
-}
-
-func (c *Config) InitConfig(path string) {
-	c.Mymap = make(map[string]string)
-	c.MyNode = make(map[string]string)
-
-	f, err := os.Open(path)
+func init() {
+	c, err := ini.Load("./config.ini")
 	if err != nil {
-		panic(err)
+		log.Pr("HFish", "127.0.0.1", "打开配置文件失败", err)
 	}
-	defer f.Close()
-
-	r := bufio.NewReader(f)
-	for {
-		b, _, err := r.ReadLine()
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			panic(err)
-		}
-
-		s := strings.TrimSpace(string(b))
-		if strings.Index(s, "#") == 0 {
-			continue
-		}
-
-		n1 := strings.Index(s, "[")
-		n2 := strings.LastIndex(s, "]")
-		if n1 > -1 && n2 > -1 && n2 > n1+1 {
-			c.strcet = strings.TrimSpace(s[n1+1: n2])
-			continue
-		}
-
-		if len(c.strcet) == 0 {
-			continue
-		}
-		index := strings.Index(s, "=")
-		if index < 0 {
-			continue
-		}
-
-		frist := strings.TrimSpace(s[:index])
-		if len(frist) == 0 {
-			continue
-		}
-		second := strings.TrimSpace(s[index+1:])
-
-		pos := strings.Index(second, "\t#")
-		if pos > -1 {
-			second = second[0:pos]
-		}
-
-		pos = strings.Index(second, " #")
-		if pos > -1 {
-			second = second[0:pos]
-		}
-
-		pos = strings.Index(second, "\t//")
-		if pos > -1 {
-			second = second[0:pos]
-		}
-
-		pos = strings.Index(second, " //")
-		if pos > -1 {
-			second = second[0:pos]
-		}
-
-		if len(second) == 0 {
-			continue
-		}
-
-		key := c.strcet + middle + frist
-		c.Mymap[key] = strings.TrimSpace(second)
-
-		key = c.strcet + middle + "introduce"
-		introduce, found := c.Mymap[key]
-		if !found {
-		}
-
-		key = c.strcet + middle + "mode"
-		mode, found := c.Mymap[key]
-		if !found {
-		}
-
-		c.MyNode[c.strcet] = strings.TrimSpace(mode) + "&&" + strings.TrimSpace(introduce)
-	}
-}
-
-func (c Config) read(node, key string) string {
-	key = node + middle + key
-	v, found := c.Mymap[key]
-	if !found {
-		return ""
-	}
-	return strings.TrimSpace(v)
+	c.BlockMode = false
+	cfg = c
 }
 
 func Get(node string, key string) string {
-	myConfig := new(Config)
-	myConfig.InitConfig("./config.ini")
-	r := myConfig.read(node, key)
-	return r
+	val := cfg.Section(node).Key(key).String()
+	return val
+}
+
+func GetInt(node string, key string) int {
+	val, _ := cfg.Section(node).Key(key).Int()
+	return val
+}
+
+func Contains(l *list.List, value string) (bool, *list.Element) {
+	for e := l.Front(); e != nil; e = e.Next() {
+		if e.Value == value {
+			return true, e
+		}
+	}
+	return false, nil
+}
+
+func GetCustomName() []string {
+	names := cfg.SectionStrings()
+	var existConfig []string
+
+	rpcStatus := Get("rpc", "status")
+
+	// 判断 RPC 是否开启 1 RPC 服务端 2 RPC 客户端
+	if rpcStatus == "1" || rpcStatus == "0" {
+		existConfig = []string{
+			"DEFAULT",
+			"rpc",
+			"admin",
+			"api",
+			"plug",
+			"web",
+			"deep",
+			"ssh",
+			"redis",
+			"mysql",
+			"telnet",
+			"ftp",
+			"mem_cache",
+			"http",
+			"tftp",
+			"elasticsearch",
+			"vnc",
+		}
+	} else if rpcStatus == "2" {
+		existConfig = []string{
+			"DEFAULT",
+			"rpc",
+			"api",
+			"plug",
+			"web",
+			"deep",
+			"ssh",
+			"redis",
+			"mysql",
+			"telnet",
+			"ftp",
+			"mem_cache",
+			"http",
+			"tftp",
+			"elasticsearch",
+			"vnc",
+		}
+	}
+
+	for i := 0; i < len(names); i++ {
+		for j := 0; j < len(existConfig); j++ {
+
+			if names[i] == existConfig[j] {
+				names = append(names[:i], names[i+1:]...)
+			}
+		}
+	}
+
+	return names
 }
